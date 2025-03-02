@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego Web</title>
+    <!-- Importar TailwindCSS desde CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- GSAP para animaciones -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
+    <!-- Howler.js para sonidos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #121212;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+        }
+
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #000;
+            border: 2px solid #fff;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .centered {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .button {
+            background-color: #3B82F6;
+            padding: 10px 20px;
+            font-size: 16px;
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .button:hover {
+            background-color: #2563EB;
+        }
+
+        .score-board {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: red;
+            font-size: 40px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Pantalla de inicio -->
+<div id="startScreen" class="centered">
+    <h1 class="text-4xl">¡Bienvenido al Juego!</h1>
+    <button class="button" onclick="startGame()">Jugar</button>
+</div>
+
+<!-- Pantalla del Juego -->
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<!-- Pantalla de Game Over -->
+<div id="gameOverScreen" class="hidden centered">
+    <h2 class="text-3xl">¡Game Over!</h2>
+    <p class="score-board" id="finalScore"></p>
+    <button class="button" onclick="restartGame()">Reiniciar</button>
+</div>
+
+<script>
+// Variables del juego
+let canvas = document.getElementById('gameCanvas');
+let ctx = canvas.getContext('2d');
+let startScreen = document.getElementById('startScreen');
+let gameOverScreen = document.getElementById('gameOverScreen');
+let finalScore = document.getElementById('finalScore');
+let scoreBoard = document.createElement('div');
+scoreBoard.classList.add('score-board');
+document.body.appendChild(scoreBoard);
+
+// Sonidos
+const shootSound = new Howl({
+    src: ['https://www.soundjay.com/button/beep-07.wav']
+});
+const explosionSound = new Howl({
+    src: ['https://www.soundjay.com/button/beep-07.wav']
+});
+
+// Jugador
+let player = {
+    x: canvas.width / 2 - 25,
+    y: canvas.height - 60,
+    width: 50,
+    height: 50,
+    speed: 5,
+    dx: 0,
+};
+
+// Enemigos
+let enemies = [];
+let enemySpeed = 2;
+let spawnRate = 50;
+let level = 1;
+let score = 0;
+
+// Teclas presionadas
+let keys = {
+    left: false,
+    right: false,
+    space: false
+};
+
+// Función de inicio
+function startGame() {
+    startScreen.classList.add('hidden');
+    gameOverScreen.classList.add('hidden');
+    gameLoop();
+    spawnEnemies();
+}
+
+// Loop principal del juego
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    movePlayer();
+    drawPlayer();
+    drawEnemies();
+    detectCollisions();
+    updateScore();
+
+    if (!gameOver()) {
+        requestAnimationFrame(gameLoop);
+    } else {
+        gameOverScreen.classList.remove('hidden');
+        finalScore.textContent = "Puntaje: " + score;
+    }
+}
+
+// Movimiento del jugador
+function movePlayer() {
+    if (keys.left && player.x > 0) {
+        player.x -= player.speed;
+    }
+    if (keys.right && player.x < canvas.width - player.width) {
+        player.x += player.speed;
+    }
+}
+
+// Dibujar jugador
+function drawPlayer() {
+    ctx.fillStyle = "#00f";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+}
+
+// Movimiento de los enemigos
+function spawnEnemies() {
+    setInterval(function() {
+        let enemy = {
+            x: Math.random() * (canvas.width - 50),
+            y: -50,
+            width: 50,
+            height: 50,
+            speed: enemySpeed,
+        };
+        enemies.push(enemy);
+    }, spawnRate);
+}
+
+// Dibujar enemigos
+function drawEnemies() {
+    for (let i = 0; i < enemies.length; i++) {
+        let enemy = enemies[i];
+        enemy.y += enemy.speed;
+
+        ctx.fillStyle = "#f00";
+        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+
+        if (enemy.y > canvas.height) {
+            enemies.splice(i, 1);
+        }
+    }
+}
+
+// Detectar colisiones
+function detectCollisions() {
+    for (let i = 0; i < enemies.length; i++) {
+        let enemy = enemies[i];
+
+        if (player.x < enemy.x + enemy.width &&
+            player.x + player.width > enemy.x &&
+            player.y < enemy.y + enemy.height &&
+            player.y + player.height > enemy.y) {
+            
+            // Colisión detectada
+            explosionSound.play();
+            enemies.splice(i, 1);
+            score -= 10;
+            levelUp();
+        }
+    }
+}
+
+// Actualizar puntaje
+function updateScore() {
+    scoreBoard.textContent = "Puntaje: " + score;
+}
+
+// Subir nivel
+function levelUp() {
+    if (score % 100 === 0) {
+        level++;
+        enemySpeed += 0.5;
+        spawnRate -= 5;
+    }
+}
+
+// Verificar si el juego ha terminado
+function gameOver() {
+    return score < 0;
+}
+
+// Reiniciar el juego
+function restartGame() {
+    score = 0;
+    level = 1;
+    enemies = [];
+    enemySpeed = 2;
+    spawnRate = 50;
+    startGame();
+}
+
+// Controles de teclado
+document.addEventListener('keydown', (e) => {
+    if (e.key === "ArrowLeft" || e.key === "a") {
+        keys.left = true;
+    }
+    if (e.key === "ArrowRight" || e.key === "d") {
+        keys.right = true;
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (e.key === "ArrowLeft" || e.key === "a") {
+        keys.left = false;
+    }
+    if (e.key === "ArrowRight" || e.key === "d") {
+        keys.right = false;
+    }
+});
+</script>
+</body>
+</html>
